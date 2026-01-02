@@ -1,5 +1,7 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer } from 'recharts';
+import { ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { OptionLeg, generatePayoffCurve, PayoffPoint } from '@/lib/instruments';
 
 interface PayoffChartProps {
@@ -8,14 +10,31 @@ interface PayoffChartProps {
   simulatedPrice: number;
 }
 
+const ZOOM_LEVELS = [0.05, 0.10, 0.15, 0.20, 0.30, 0.50];
+
 export const PayoffChart = ({ legs, currentPrice, simulatedPrice }: PayoffChartProps) => {
+  const [zoomIndex, setZoomIndex] = useState(2); // Default 15%
+  const zoomRange = ZOOM_LEVELS[zoomIndex];
+
   const payoffData = useMemo(() => {
     if (legs.length === 0) return [];
-    return generatePayoffCurve(legs, currentPrice, 0.15);
-  }, [legs, currentPrice]);
+    return generatePayoffCurve(legs, currentPrice, zoomRange);
+  }, [legs, currentPrice, zoomRange]);
 
   const maxPnL = useMemo(() => Math.max(...payoffData.map(d => d.pnl), 0), [payoffData]);
   const minPnL = useMemo(() => Math.min(...payoffData.map(d => d.pnl), 0), [payoffData]);
+
+  const handleZoomIn = () => {
+    if (zoomIndex > 0) setZoomIndex(zoomIndex - 1);
+  };
+
+  const handleZoomOut = () => {
+    if (zoomIndex < ZOOM_LEVELS.length - 1) setZoomIndex(zoomIndex + 1);
+  };
+
+  const handleResetZoom = () => {
+    setZoomIndex(2);
+  };
 
   if (legs.length === 0) {
     return (
@@ -45,8 +64,45 @@ export const PayoffChart = ({ legs, currentPrice, simulatedPrice }: PayoffChartP
   };
 
   return (
-    <div className="h-[400px] w-full">
-      <ResponsiveContainer>
+    <div className="space-y-4">
+      {/* Zoom Controls */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleZoomIn}
+            disabled={zoomIndex === 0}
+            className="h-8 w-8 p-0"
+          >
+            <ZoomIn className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleZoomOut}
+            disabled={zoomIndex === ZOOM_LEVELS.length - 1}
+            className="h-8 w-8 p-0"
+          >
+            <ZoomOut className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleResetZoom}
+            className="h-8 px-2"
+          >
+            <RotateCcw className="h-3 w-3 mr-1" />
+            Reset
+          </Button>
+        </div>
+        <div className="text-xs text-muted-foreground font-mono">
+          Range: ±{(zoomRange * 100).toFixed(0)}% (${(currentPrice * (1 - zoomRange)).toFixed(0)} - ${(currentPrice * (1 + zoomRange)).toFixed(0)})
+        </div>
+      </div>
+
+      <div className="h-[400px] w-full">
+        <ResponsiveContainer>
         <AreaChart
           data={payoffData}
           margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
@@ -138,6 +194,7 @@ export const PayoffChart = ({ legs, currentPrice, simulatedPrice }: PayoffChartP
           />
         </AreaChart>
       </ResponsiveContainer>
+      </div>
     </div>
   );
 };

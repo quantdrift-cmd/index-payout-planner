@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Check, X } from 'lucide-react';
 import { Instrument, OptionLeg, OptionType, PositionSide } from '@/lib/instruments';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,6 +11,7 @@ interface PositionBuilderProps {
   legs: OptionLeg[];
   onAddLeg: (leg: OptionLeg) => void;
   onRemoveLeg: (id: string) => void;
+  onUpdateLeg: (id: string, updates: Partial<OptionLeg>) => void;
   currentPrice: number;
 }
 
@@ -19,6 +20,7 @@ export const PositionBuilder = ({
   legs, 
   onAddLeg, 
   onRemoveLeg,
+  onUpdateLeg,
   currentPrice 
 }: PositionBuilderProps) => {
   const [optionType, setOptionType] = useState<OptionType>('call');
@@ -26,6 +28,14 @@ export const PositionBuilder = ({
   const [strike, setStrike] = useState<string>(currentPrice.toString());
   const [premium, setPremium] = useState<string>('5.00');
   const [quantity, setQuantity] = useState<string>('1');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValues, setEditValues] = useState<{
+    strike: string;
+    premium: string;
+    quantity: string;
+    optionType: OptionType;
+    side: PositionSide;
+  } | null>(null);
 
   const handleAddLeg = () => {
     const newLeg: OptionLeg = {
@@ -38,6 +48,36 @@ export const PositionBuilder = ({
       quantity: parseInt(quantity),
     };
     onAddLeg(newLeg);
+  };
+
+  const startEditing = (leg: OptionLeg) => {
+    setEditingId(leg.id);
+    setEditValues({
+      strike: leg.strike.toString(),
+      premium: leg.premium.toString(),
+      quantity: leg.quantity.toString(),
+      optionType: leg.optionType,
+      side: leg.side,
+    });
+  };
+
+  const cancelEditing = () => {
+    setEditingId(null);
+    setEditValues(null);
+  };
+
+  const saveEditing = (id: string) => {
+    if (editValues) {
+      onUpdateLeg(id, {
+        strike: parseFloat(editValues.strike),
+        premium: parseFloat(editValues.premium),
+        quantity: parseInt(editValues.quantity),
+        optionType: editValues.optionType,
+        side: editValues.side,
+      });
+    }
+    setEditingId(null);
+    setEditValues(null);
   };
 
   return (
@@ -156,16 +196,129 @@ export const PositionBuilder = ({
                 <th className="data-cell text-right">Qty</th>
                 <th className="data-cell text-right">Mult</th>
                 <th className="data-cell text-right">Cost/Credit</th>
-                <th className="data-cell text-center"></th>
+                <th className="data-cell text-center">Actions</th>
               </tr>
             </thead>
             <tbody>
               {legs.map((leg) => {
+                const isEditing = editingId === leg.id;
                 const totalCost = leg.premium * leg.quantity * leg.instrument.multiplier;
                 const isCredit = leg.side === 'short';
                 
+                if (isEditing && editValues) {
+                  return (
+                    <tr key={leg.id} className="border-t border-border bg-accent/30">
+                      <td className="data-cell font-semibold">{leg.instrument.symbol}</td>
+                      <td className="data-cell">
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => setEditValues({ ...editValues, optionType: 'call' })}
+                            className={cn(
+                              "px-2 py-0.5 text-xs rounded font-mono transition-colors",
+                              editValues.optionType === 'call' 
+                                ? "bg-call text-call-foreground" 
+                                : "bg-secondary text-muted-foreground hover:bg-secondary/80"
+                            )}
+                          >
+                            C
+                          </button>
+                          <button
+                            onClick={() => setEditValues({ ...editValues, optionType: 'put' })}
+                            className={cn(
+                              "px-2 py-0.5 text-xs rounded font-mono transition-colors",
+                              editValues.optionType === 'put' 
+                                ? "bg-put text-put-foreground" 
+                                : "bg-secondary text-muted-foreground hover:bg-secondary/80"
+                            )}
+                          >
+                            P
+                          </button>
+                        </div>
+                      </td>
+                      <td className="data-cell">
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => setEditValues({ ...editValues, side: 'long' })}
+                            className={cn(
+                              "px-2 py-0.5 text-xs rounded font-mono transition-colors",
+                              editValues.side === 'long' 
+                                ? "bg-profit text-white" 
+                                : "bg-secondary text-muted-foreground hover:bg-secondary/80"
+                            )}
+                          >
+                            L
+                          </button>
+                          <button
+                            onClick={() => setEditValues({ ...editValues, side: 'short' })}
+                            className={cn(
+                              "px-2 py-0.5 text-xs rounded font-mono transition-colors",
+                              editValues.side === 'short' 
+                                ? "bg-loss text-white" 
+                                : "bg-secondary text-muted-foreground hover:bg-secondary/80"
+                            )}
+                          >
+                            S
+                          </button>
+                        </div>
+                      </td>
+                      <td className="data-cell text-right">
+                        <Input
+                          type="number"
+                          value={editValues.strike}
+                          onChange={(e) => setEditValues({ ...editValues, strike: e.target.value })}
+                          className="h-7 w-20 font-mono text-xs text-right ml-auto"
+                        />
+                      </td>
+                      <td className="data-cell text-right">
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={editValues.premium}
+                          onChange={(e) => setEditValues({ ...editValues, premium: e.target.value })}
+                          className="h-7 w-16 font-mono text-xs text-right ml-auto"
+                        />
+                      </td>
+                      <td className="data-cell text-right">
+                        <Input
+                          type="number"
+                          min="1"
+                          value={editValues.quantity}
+                          onChange={(e) => setEditValues({ ...editValues, quantity: e.target.value })}
+                          className="h-7 w-14 font-mono text-xs text-right ml-auto"
+                        />
+                      </td>
+                      <td className="data-cell text-right text-muted-foreground">×{leg.instrument.multiplier}</td>
+                      <td className="data-cell text-right text-muted-foreground">—</td>
+                      <td className="data-cell text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => saveEditing(leg.id)}
+                            className="h-6 w-6 p-0 text-profit hover:text-profit hover:bg-profit/20"
+                          >
+                            <Check className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={cancelEditing}
+                            className="h-6 w-6 p-0 text-muted-foreground hover:text-loss hover:bg-loss/20"
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                }
+                
                 return (
-                  <tr key={leg.id} className="border-t border-border hover:bg-accent/30 transition-colors">
+                  <tr 
+                    key={leg.id} 
+                    className="border-t border-border hover:bg-accent/30 transition-colors cursor-pointer group"
+                    onDoubleClick={() => startEditing(leg)}
+                  >
                     <td className="data-cell font-semibold">{leg.instrument.symbol}</td>
                     <td className={cn(
                       "data-cell font-semibold",
@@ -190,20 +343,33 @@ export const PositionBuilder = ({
                       {isCredit ? '+' : '-'}${totalCost.toLocaleString()}
                     </td>
                     <td className="data-cell text-center">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => onRemoveLeg(leg.id)}
-                        className="h-6 w-6 p-0 text-muted-foreground hover:text-loss"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
+                      <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={(e) => { e.stopPropagation(); startEditing(leg); }}
+                          className="h-6 px-2 text-xs text-muted-foreground hover:text-primary"
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={(e) => { e.stopPropagation(); onRemoveLeg(leg.id); }}
+                          className="h-6 w-6 p-0 text-muted-foreground hover:text-loss"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
+          <div className="px-3 py-2 bg-secondary/30 text-xs text-muted-foreground">
+            💡 Double-click a row to edit, or hover for action buttons
+          </div>
         </div>
       )}
     </div>
