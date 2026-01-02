@@ -200,9 +200,9 @@ export const PositionSummary = ({ legs, currentPrice, simulatedPrice }: Position
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <p className="font-mono text-2xl font-bold text-primary cursor-help">
+                <div className="font-mono text-2xl font-bold text-primary cursor-help inline-block">
                   ${stats.marginReq.margin.toLocaleString()}
-                </p>
+                </div>
               </TooltipTrigger>
               <TooltipContent side="bottom" className="max-w-xs">
                 <div className="space-y-1">
