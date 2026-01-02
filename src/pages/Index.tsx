@@ -1,12 +1,15 @@
 import { useState, useCallback } from 'react';
-import { BarChart3, Layers, Calculator } from 'lucide-react';
+import { BarChart3, Layers, Calculator, Search } from 'lucide-react';
 import { Instrument, OptionLeg, getInstrumentBySymbol } from '@/lib/instruments';
+import { Stock, StockGroup, defaultStockGroups } from '@/lib/stocks';
 import { InstrumentSelector } from '@/components/InstrumentSelector';
+import { StockSearch } from '@/components/StockSearch';
 import { PositionBuilder } from '@/components/PositionBuilder';
 import { PayoffChart } from '@/components/PayoffChart';
 import { PositionSummary } from '@/components/PositionSummary';
 import { PriceSimulator } from '@/components/PriceSimulator';
 import { MultiplierReference } from '@/components/MultiplierReference';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const DEFAULT_PRICES: Record<string, number> = {
   SPX: 5850,
@@ -20,6 +23,9 @@ const DEFAULT_PRICES: Record<string, number> = {
   MNQ: 20500,
 };
 
+// Default stock prices (approximate)
+const STOCK_DEFAULT_PRICE = 150;
+
 const Index = () => {
   const [selectedInstrument, setSelectedInstrument] = useState<Instrument | null>(
     getInstrumentBySymbol('SPX') || null
@@ -27,12 +33,36 @@ const Index = () => {
   const [legs, setLegs] = useState<OptionLeg[]>([]);
   const [currentPrice, setCurrentPrice] = useState(DEFAULT_PRICES['SPX']);
   const [simulatedPrice, setSimulatedPrice] = useState(DEFAULT_PRICES['SPX']);
+  
+  // Stock-related state
+  const [selectedStock, setSelectedStock] = useState<Stock | null>(null);
+  const [stockGroups, setStockGroups] = useState<StockGroup[]>(defaultStockGroups);
+  const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'indices' | 'stocks'>('indices');
 
   const handleInstrumentSelect = useCallback((instrument: Instrument) => {
     setSelectedInstrument(instrument);
+    setSelectedStock(null); // Clear stock selection
     const defaultPrice = DEFAULT_PRICES[instrument.symbol] || 100;
     setCurrentPrice(defaultPrice);
     setSimulatedPrice(defaultPrice);
+    setLegs([]); // Clear legs when switching instruments
+  }, []);
+
+  const handleStockSelect = useCallback((stock: Stock) => {
+    setSelectedStock(stock);
+    // Convert stock to Instrument format for compatibility
+    const stockAsInstrument: Instrument = {
+      symbol: stock.symbol,
+      name: stock.name,
+      type: 'stock',
+      multiplier: stock.multiplier,
+      tickSize: stock.tickSize,
+    };
+    setSelectedInstrument(stockAsInstrument);
+    setCurrentPrice(STOCK_DEFAULT_PRICE);
+    setSimulatedPrice(STOCK_DEFAULT_PRICE);
+    setLegs([]); // Clear legs when switching instruments
   }, []);
 
   const handleAddLeg = useCallback((leg: OptionLeg) => {
@@ -53,6 +83,10 @@ const Index = () => {
     setSimulatedPrice(currentPrice);
   }, [currentPrice]);
 
+  const handleTabChange = useCallback((value: string) => {
+    setActiveTab(value as 'indices' | 'stocks');
+  }, []);
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -65,7 +99,7 @@ const Index = () => {
               </div>
               <div>
                 <h1 className="text-xl font-bold text-foreground">Options Payoff Calculator</h1>
-                <p className="text-xs text-muted-foreground">Multi-leg index options strategy analyzer</p>
+                <p className="text-xs text-muted-foreground">Multi-leg options strategy analyzer</p>
               </div>
             </div>
             <div className="flex items-center gap-4">
@@ -85,16 +119,44 @@ const Index = () => {
       </header>
 
       <main className="container mx-auto px-4 py-6 space-y-6">
-        {/* Instrument Selection */}
+        {/* Instrument Selection with Tabs */}
         <section className="bg-card border border-border rounded-xl p-6 animate-slide-in">
-          <div className="flex items-center gap-2 mb-4">
-            <Layers className="h-5 w-5 text-primary" />
-            <h2 className="text-lg font-semibold text-foreground">Select Instrument</h2>
-          </div>
-          <InstrumentSelector
-            selectedInstrument={selectedInstrument}
-            onSelect={handleInstrumentSelect}
-          />
+          <Tabs value={activeTab} onValueChange={handleTabChange}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Layers className="h-5 w-5 text-primary" />
+                <h2 className="text-lg font-semibold text-foreground">Select Instrument</h2>
+              </div>
+              <TabsList>
+                <TabsTrigger value="indices" className="font-mono">
+                  <Layers className="h-4 w-4 mr-2" />
+                  Indices
+                </TabsTrigger>
+                <TabsTrigger value="stocks" className="font-mono">
+                  <Search className="h-4 w-4 mr-2" />
+                  Stocks
+                </TabsTrigger>
+              </TabsList>
+            </div>
+            
+            <TabsContent value="indices" className="mt-0">
+              <InstrumentSelector
+                selectedInstrument={selectedStock ? null : selectedInstrument}
+                onSelect={handleInstrumentSelect}
+              />
+            </TabsContent>
+            
+            <TabsContent value="stocks" className="mt-0">
+              <StockSearch
+                selectedStock={selectedStock}
+                onSelectStock={handleStockSelect}
+                stockGroups={stockGroups}
+                onUpdateGroups={setStockGroups}
+                activeGroupId={activeGroupId}
+                onSelectGroup={setActiveGroupId}
+              />
+            </TabsContent>
+          </Tabs>
         </section>
 
         {/* Multiplier Reference */}
