@@ -43,6 +43,12 @@ const Index = () => {
     setLegs((prev) => prev.filter((leg) => leg.id !== id));
   }, []);
 
+  const handleUpdateLeg = useCallback((id: string, updates: Partial<OptionLeg>) => {
+    setLegs((prev) => prev.map((leg) => 
+      leg.id === id ? { ...leg, ...updates } : leg
+    ));
+  }, []);
+
   const handleResetSimulation = useCallback(() => {
     setSimulatedPrice(currentPrice);
   }, [currentPrice]);
@@ -109,6 +115,7 @@ const Index = () => {
               legs={legs}
               onAddLeg={handleAddLeg}
               onRemoveLeg={handleRemoveLeg}
+              onUpdateLeg={handleUpdateLeg}
               currentPrice={currentPrice}
             />
           </section>
