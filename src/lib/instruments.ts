@@ -1,8 +1,8 @@
 export interface Instrument {
   symbol: string;
   name: string;
-  family: 'SPX' | 'NDX';
-  type: 'index' | 'etf' | 'future' | 'micro-future';
+  family?: 'SPX' | 'NDX';
+  type: 'index' | 'etf' | 'future' | 'micro-future' | 'stock';
   multiplier: number;
   tickSize: number;
 }
