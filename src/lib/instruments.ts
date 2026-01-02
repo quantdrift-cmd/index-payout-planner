@@ -135,3 +135,109 @@ export const calculateMaxLoss = (legs: OptionLeg[], currentPrice: number): numbe
   
   return minPnL;
 };
+
+// Margin calculation for options positions
+// Uses standard Reg-T margin rules as approximation
+export const calculateMarginRequirement = (legs: OptionLeg[], currentPrice: number): { 
+  margin: number; 
+  marginType: 'cash-secured' | 'spread' | 'naked' | 'long-only';
+  breakdown: { description: string; amount: number }[];
+} => {
+  if (legs.length === 0) {
+    return { margin: 0, marginType: 'long-only', breakdown: [] };
+  }
+
+  const breakdown: { description: string; amount: number }[] = [];
+  let totalMargin = 0;
+  let marginType: 'cash-secured' | 'spread' | 'naked' | 'long-only' = 'long-only';
+
+  const shortLegs = legs.filter(l => l.side === 'short');
+  const longLegs = legs.filter(l => l.side === 'long');
+
+  // If all legs are long, margin = total premium paid
+  if (shortLegs.length === 0) {
+    const longPremium = longLegs.reduce((sum, leg) => {
+      return sum + (leg.premium * leg.quantity * leg.instrument.multiplier);
+    }, 0);
+    breakdown.push({ description: 'Long options (premium paid)', amount: longPremium });
+    return { margin: longPremium, marginType: 'long-only', breakdown };
+  }
+
+  // Check for spreads (matched short + long at same quantity)
+  const processedShorts = new Set<string>();
+  const processedLongs = new Set<string>();
+
+  // Try to pair spreads
+  for (const shortLeg of shortLegs) {
+    if (processedShorts.has(shortLeg.id)) continue;
+
+    // Find matching long leg (same type, instrument family)
+    const matchingLong = longLegs.find(l => 
+      !processedLongs.has(l.id) &&
+      l.optionType === shortLeg.optionType &&
+      l.instrument.family === shortLeg.instrument.family &&
+      l.quantity === shortLeg.quantity
+    );
+
+    if (matchingLong) {
+      // Vertical spread - margin = width of strikes
+      const strikeWidth = Math.abs(shortLeg.strike - matchingLong.strike);
+      const spreadMargin = strikeWidth * shortLeg.quantity * shortLeg.instrument.multiplier;
+      
+      breakdown.push({ 
+        description: `${shortLeg.optionType.toUpperCase()} spread (${shortLeg.strike}/${matchingLong.strike})`, 
+        amount: spreadMargin 
+      });
+      totalMargin += spreadMargin;
+      marginType = 'spread';
+      
+      processedShorts.add(shortLeg.id);
+      processedLongs.add(matchingLong.id);
+    }
+  }
+
+  // Process remaining naked shorts
+  for (const shortLeg of shortLegs) {
+    if (processedShorts.has(shortLeg.id)) continue;
+
+    const { instrument, optionType, strike, premium, quantity } = shortLeg;
+    const multiplier = instrument.multiplier;
+
+    // Naked option margin formula (simplified Reg-T):
+    // Max of: (20% of underlying + premium - OTM amount) or (10% of strike + premium)
+    const underlyingValue = currentPrice * multiplier * quantity;
+    const premiumValue = premium * multiplier * quantity;
+    
+    let otmAmount = 0;
+    if (optionType === 'call' && strike > currentPrice) {
+      otmAmount = (strike - currentPrice) * multiplier * quantity;
+    } else if (optionType === 'put' && strike < currentPrice) {
+      otmAmount = (currentPrice - strike) * multiplier * quantity;
+    }
+
+    const method1 = (underlyingValue * 0.20) + premiumValue - otmAmount;
+    const method2 = (strike * multiplier * quantity * 0.10) + premiumValue;
+    const nakedMargin = Math.max(method1, method2);
+
+    breakdown.push({ 
+      description: `Naked ${optionType} ${instrument.symbol} ${strike}`, 
+      amount: nakedMargin 
+    });
+    totalMargin += nakedMargin;
+    marginType = 'naked';
+  }
+
+  // Add remaining long positions (just premium)
+  for (const longLeg of longLegs) {
+    if (processedLongs.has(longLeg.id)) continue;
+
+    const longPremium = longLeg.premium * longLeg.quantity * longLeg.instrument.multiplier;
+    breakdown.push({ 
+      description: `Long ${longLeg.optionType} ${longLeg.instrument.symbol} ${longLeg.strike}`, 
+      amount: longPremium 
+    });
+    totalMargin += longPremium;
+  }
+
+  return { margin: Math.round(totalMargin * 100) / 100, marginType, breakdown };
+};

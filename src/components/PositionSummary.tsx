@@ -1,13 +1,20 @@
 import { useMemo } from 'react';
-import { TrendingUp, TrendingDown, Target, AlertTriangle } from 'lucide-react';
+import { TrendingUp, TrendingDown, Target, AlertTriangle, Shield } from 'lucide-react';
 import { 
   OptionLeg, 
   calculateTotalPayoff, 
   calculateBreakevens,
   calculateMaxProfit,
-  calculateMaxLoss 
+  calculateMaxLoss,
+  calculateMarginRequirement
 } from '@/lib/instruments';
 import { cn } from '@/lib/utils';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 interface PositionSummaryProps {
   legs: OptionLeg[];
@@ -24,6 +31,7 @@ export const PositionSummary = ({ legs, currentPrice, simulatedPrice }: Position
     const breakevens = calculateBreakevens(legs, currentPrice);
     const maxProfit = calculateMaxProfit(legs, currentPrice);
     const maxLoss = calculateMaxLoss(legs, currentPrice);
+    const marginReq = calculateMarginRequirement(legs, currentPrice);
 
     // Calculate total cost/credit
     const totalPremium = legs.reduce((sum, leg) => {
@@ -38,6 +46,7 @@ export const PositionSummary = ({ legs, currentPrice, simulatedPrice }: Position
       maxProfit,
       maxLoss,
       totalPremium,
+      marginReq,
     };
   }, [legs, currentPrice, simulatedPrice]);
 
@@ -167,6 +176,49 @@ export const PositionSummary = ({ legs, currentPrice, simulatedPrice }: Position
           </p>
           <p className="text-xs text-muted-foreground mt-1">
             {stats.totalPremium >= 0 ? 'Credit received' : 'Debit paid'}
+          </p>
+        </div>
+
+        {/* Margin Requirement */}
+        <div className="bg-card border border-primary/30 rounded-lg p-4 md:col-span-2">
+          <div className="flex items-center gap-2 text-muted-foreground mb-2">
+            <Shield className="h-4 w-4 text-primary" />
+            <span className="text-xs">Margin Requirement</span>
+            <span className={cn(
+              "text-xs px-2 py-0.5 rounded-full",
+              stats.marginReq.marginType === 'long-only' && "bg-profit/20 text-profit",
+              stats.marginReq.marginType === 'spread' && "bg-primary/20 text-primary",
+              stats.marginReq.marginType === 'naked' && "bg-loss/20 text-loss",
+              stats.marginReq.marginType === 'cash-secured' && "bg-amber-500/20 text-amber-400"
+            )}>
+              {stats.marginReq.marginType === 'long-only' && 'Long Only'}
+              {stats.marginReq.marginType === 'spread' && 'Spread'}
+              {stats.marginReq.marginType === 'naked' && 'Naked'}
+              {stats.marginReq.marginType === 'cash-secured' && 'Cash Secured'}
+            </span>
+          </div>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <p className="font-mono text-2xl font-bold text-primary cursor-help">
+                  ${stats.marginReq.margin.toLocaleString()}
+                </p>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs">
+                <div className="space-y-1">
+                  <p className="font-semibold text-sm">Margin Breakdown:</p>
+                  {stats.marginReq.breakdown.map((item, i) => (
+                    <div key={i} className="flex justify-between gap-4 text-xs">
+                      <span className="text-muted-foreground">{item.description}</span>
+                      <span className="font-mono">${item.amount.toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <p className="text-xs text-muted-foreground mt-1">
+            Estimated Reg-T margin • Hover for breakdown
           </p>
         </div>
       </div>
