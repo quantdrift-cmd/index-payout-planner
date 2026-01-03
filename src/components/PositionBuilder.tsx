@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { Plus, Trash2, Check, X } from 'lucide-react';
-import { Instrument, OptionLeg, OptionType, PositionSide } from '@/lib/instruments';
+import { useState, useEffect } from 'react';
+import { Plus, Trash2, Check, X, ChevronUp, ChevronDown } from 'lucide-react';
+import { Instrument, OptionLeg, OptionType, PositionSide, roundToStrike } from '@/lib/instruments';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -25,7 +25,7 @@ export const PositionBuilder = ({
 }: PositionBuilderProps) => {
   const [optionType, setOptionType] = useState<OptionType>('call');
   const [side, setSide] = useState<PositionSide>('long');
-  const [strike, setStrike] = useState<string>(currentPrice.toString());
+  const [strike, setStrike] = useState<string>('');
   const [premium, setPremium] = useState<string>('5.00');
   const [quantity, setQuantity] = useState<string>('1');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -36,6 +36,20 @@ export const PositionBuilder = ({
     optionType: OptionType;
     side: PositionSide;
   } | null>(null);
+
+  // Update strike to valid ATM strike when instrument or price changes
+  useEffect(() => {
+    const atmStrike = roundToStrike(currentPrice, instrument.strikeInterval);
+    setStrike(atmStrike.toString());
+  }, [currentPrice, instrument.strikeInterval]);
+
+  const adjustStrike = (direction: 'up' | 'down') => {
+    const currentStrike = parseFloat(strike) || currentPrice;
+    const newStrike = direction === 'up' 
+      ? currentStrike + instrument.strikeInterval
+      : currentStrike - instrument.strikeInterval;
+    setStrike(Math.max(instrument.strikeInterval, newStrike).toFixed(2));
+  };
 
   const handleAddLeg = () => {
     const newLeg: OptionLeg = {
@@ -143,13 +157,34 @@ export const PositionBuilder = ({
 
         {/* Strike */}
         <div className="space-y-2">
-          <Label className="text-xs text-muted-foreground">Strike</Label>
-          <Input
-            type="number"
-            value={strike}
-            onChange={(e) => setStrike(e.target.value)}
-            className="font-mono text-sm h-9"
-          />
+          <Label className="text-xs text-muted-foreground">
+            Strike <span className="text-primary/60">(±{instrument.strikeInterval})</span>
+          </Label>
+          <div className="flex gap-1">
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => adjustStrike('down')}
+              className="h-9 px-2"
+            >
+              <ChevronDown className="h-4 w-4" />
+            </Button>
+            <Input
+              type="number"
+              step={instrument.strikeInterval}
+              value={strike}
+              onChange={(e) => setStrike(e.target.value)}
+              className="font-mono text-sm h-9 text-center"
+            />
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => adjustStrike('up')}
+              className="h-9 px-2"
+            >
+              <ChevronUp className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
         {/* Premium */}

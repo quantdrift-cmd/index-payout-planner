@@ -1,9 +1,13 @@
+import { getStrikeIntervalForPrice } from './instruments';
+
 export interface Stock {
   symbol: string;
   name: string;
   type: 'stock';
   multiplier: number;
   tickSize: number;
+  strikeInterval: number;
+  price?: number; // Approximate price for strike interval calculation
 }
 
 export interface StockGroup {
@@ -12,16 +16,47 @@ export interface StockGroup {
   stocks: Stock[];
 }
 
+// Known strike intervals for popular stocks (based on typical trading prices)
+const knownStrikeIntervals: Record<string, number> = {
+  'AAPL': 2.5,    // ~$175-200
+  'TSLA': 2.5,   // ~$200-300
+  'GOOGL': 2.5,  // ~$140-180
+  'MSFT': 2.5,   // ~$400
+  'AMZN': 2.5,   // ~$180-200
+  'NVDA': 2.5,   // ~$500+
+  'META': 2.5,   // ~$500+
+  'AMD': 1,      // ~$120-150
+  'INTC': 0.5,   // ~$20-30
+  'F': 0.5,      // ~$10-15
+  'GM': 0.5,     // ~$35-45
+  'RIVN': 0.5,   // ~$10-15
+  'JPM': 1,      // ~$200
+  'BAC': 0.5,    // ~$35-45
+  'GS': 2.5,     // ~$400-500
+  'MS': 1,       // ~$90-100
+  'TSM': 2.5,    // ~$150-180
+};
+
+// Get strike interval for a stock
+export const getStockStrikeInterval = (symbol: string, price?: number): number => {
+  // Use known interval if available
+  if (knownStrikeIntervals[symbol]) {
+    return knownStrikeIntervals[symbol];
+  }
+  // Otherwise calculate based on price
+  return getStrikeIntervalForPrice(price || 100);
+};
+
 // Popular stocks to show initially
 export const popularStocks: Stock[] = [
-  { symbol: 'AAPL', name: 'Apple Inc.', type: 'stock', multiplier: 100, tickSize: 0.01 },
-  { symbol: 'TSLA', name: 'Tesla Inc.', type: 'stock', multiplier: 100, tickSize: 0.01 },
-  { symbol: 'GOOGL', name: 'Alphabet Inc.', type: 'stock', multiplier: 100, tickSize: 0.01 },
-  { symbol: 'MSFT', name: 'Microsoft Corp.', type: 'stock', multiplier: 100, tickSize: 0.01 },
-  { symbol: 'AMZN', name: 'Amazon.com Inc.', type: 'stock', multiplier: 100, tickSize: 0.01 },
-  { symbol: 'NVDA', name: 'NVIDIA Corp.', type: 'stock', multiplier: 100, tickSize: 0.01 },
-  { symbol: 'META', name: 'Meta Platforms Inc.', type: 'stock', multiplier: 100, tickSize: 0.01 },
-  { symbol: 'AMD', name: 'Advanced Micro Devices', type: 'stock', multiplier: 100, tickSize: 0.01 },
+  { symbol: 'AAPL', name: 'Apple Inc.', type: 'stock', multiplier: 100, tickSize: 0.01, strikeInterval: 2.5 },
+  { symbol: 'TSLA', name: 'Tesla Inc.', type: 'stock', multiplier: 100, tickSize: 0.01, strikeInterval: 2.5 },
+  { symbol: 'GOOGL', name: 'Alphabet Inc.', type: 'stock', multiplier: 100, tickSize: 0.01, strikeInterval: 2.5 },
+  { symbol: 'MSFT', name: 'Microsoft Corp.', type: 'stock', multiplier: 100, tickSize: 0.01, strikeInterval: 2.5 },
+  { symbol: 'AMZN', name: 'Amazon.com Inc.', type: 'stock', multiplier: 100, tickSize: 0.01, strikeInterval: 2.5 },
+  { symbol: 'NVDA', name: 'NVIDIA Corp.', type: 'stock', multiplier: 100, tickSize: 0.01, strikeInterval: 2.5 },
+  { symbol: 'META', name: 'Meta Platforms Inc.', type: 'stock', multiplier: 100, tickSize: 0.01, strikeInterval: 2.5 },
+  { symbol: 'AMD', name: 'Advanced Micro Devices', type: 'stock', multiplier: 100, tickSize: 0.01, strikeInterval: 1 },
 ];
 
 // Preset stock groups
@@ -30,40 +65,40 @@ export const defaultStockGroups: StockGroup[] = [
     id: 'tech',
     name: 'Tech Giants',
     stocks: [
-      { symbol: 'AAPL', name: 'Apple Inc.', type: 'stock', multiplier: 100, tickSize: 0.01 },
-      { symbol: 'MSFT', name: 'Microsoft Corp.', type: 'stock', multiplier: 100, tickSize: 0.01 },
-      { symbol: 'GOOGL', name: 'Alphabet Inc.', type: 'stock', multiplier: 100, tickSize: 0.01 },
-      { symbol: 'META', name: 'Meta Platforms Inc.', type: 'stock', multiplier: 100, tickSize: 0.01 },
+      { symbol: 'AAPL', name: 'Apple Inc.', type: 'stock', multiplier: 100, tickSize: 0.01, strikeInterval: 2.5 },
+      { symbol: 'MSFT', name: 'Microsoft Corp.', type: 'stock', multiplier: 100, tickSize: 0.01, strikeInterval: 2.5 },
+      { symbol: 'GOOGL', name: 'Alphabet Inc.', type: 'stock', multiplier: 100, tickSize: 0.01, strikeInterval: 2.5 },
+      { symbol: 'META', name: 'Meta Platforms Inc.', type: 'stock', multiplier: 100, tickSize: 0.01, strikeInterval: 2.5 },
     ],
   },
   {
     id: 'ev',
     name: 'EV & Auto',
     stocks: [
-      { symbol: 'TSLA', name: 'Tesla Inc.', type: 'stock', multiplier: 100, tickSize: 0.01 },
-      { symbol: 'RIVN', name: 'Rivian Automotive', type: 'stock', multiplier: 100, tickSize: 0.01 },
-      { symbol: 'F', name: 'Ford Motor Co.', type: 'stock', multiplier: 100, tickSize: 0.01 },
-      { symbol: 'GM', name: 'General Motors', type: 'stock', multiplier: 100, tickSize: 0.01 },
+      { symbol: 'TSLA', name: 'Tesla Inc.', type: 'stock', multiplier: 100, tickSize: 0.01, strikeInterval: 2.5 },
+      { symbol: 'RIVN', name: 'Rivian Automotive', type: 'stock', multiplier: 100, tickSize: 0.01, strikeInterval: 0.5 },
+      { symbol: 'F', name: 'Ford Motor Co.', type: 'stock', multiplier: 100, tickSize: 0.01, strikeInterval: 0.5 },
+      { symbol: 'GM', name: 'General Motors', type: 'stock', multiplier: 100, tickSize: 0.01, strikeInterval: 0.5 },
     ],
   },
   {
     id: 'semiconductors',
     name: 'Semiconductors',
     stocks: [
-      { symbol: 'NVDA', name: 'NVIDIA Corp.', type: 'stock', multiplier: 100, tickSize: 0.01 },
-      { symbol: 'AMD', name: 'Advanced Micro Devices', type: 'stock', multiplier: 100, tickSize: 0.01 },
-      { symbol: 'INTC', name: 'Intel Corp.', type: 'stock', multiplier: 100, tickSize: 0.01 },
-      { symbol: 'TSM', name: 'Taiwan Semiconductor', type: 'stock', multiplier: 100, tickSize: 0.01 },
+      { symbol: 'NVDA', name: 'NVIDIA Corp.', type: 'stock', multiplier: 100, tickSize: 0.01, strikeInterval: 2.5 },
+      { symbol: 'AMD', name: 'Advanced Micro Devices', type: 'stock', multiplier: 100, tickSize: 0.01, strikeInterval: 1 },
+      { symbol: 'INTC', name: 'Intel Corp.', type: 'stock', multiplier: 100, tickSize: 0.01, strikeInterval: 0.5 },
+      { symbol: 'TSM', name: 'Taiwan Semiconductor', type: 'stock', multiplier: 100, tickSize: 0.01, strikeInterval: 2.5 },
     ],
   },
   {
     id: 'finance',
     name: 'Financials',
     stocks: [
-      { symbol: 'JPM', name: 'JPMorgan Chase', type: 'stock', multiplier: 100, tickSize: 0.01 },
-      { symbol: 'BAC', name: 'Bank of America', type: 'stock', multiplier: 100, tickSize: 0.01 },
-      { symbol: 'GS', name: 'Goldman Sachs', type: 'stock', multiplier: 100, tickSize: 0.01 },
-      { symbol: 'MS', name: 'Morgan Stanley', type: 'stock', multiplier: 100, tickSize: 0.01 },
+      { symbol: 'JPM', name: 'JPMorgan Chase', type: 'stock', multiplier: 100, tickSize: 0.01, strikeInterval: 1 },
+      { symbol: 'BAC', name: 'Bank of America', type: 'stock', multiplier: 100, tickSize: 0.01, strikeInterval: 0.5 },
+      { symbol: 'GS', name: 'Goldman Sachs', type: 'stock', multiplier: 100, tickSize: 0.01, strikeInterval: 2.5 },
+      { symbol: 'MS', name: 'Morgan Stanley', type: 'stock', multiplier: 100, tickSize: 0.01, strikeInterval: 1 },
     ],
   },
 ];
@@ -98,6 +133,7 @@ export const searchStocks = async (query: string): Promise<Stock[]> => {
         type: 'stock',
         multiplier: 100,
         tickSize: 0.01,
+        strikeInterval: getStockStrikeInterval(q.symbol),
       }));
   } catch (error) {
     console.error('Stock search error:', error);
@@ -109,10 +145,11 @@ export const searchStocks = async (query: string): Promise<Stock[]> => {
   }
 };
 
-export const createStock = (symbol: string, name: string): Stock => ({
+export const createStock = (symbol: string, name: string, price?: number): Stock => ({
   symbol: symbol.toUpperCase(),
   name,
   type: 'stock',
   multiplier: 100,
   tickSize: 0.01,
+  strikeInterval: getStockStrikeInterval(symbol, price),
 });

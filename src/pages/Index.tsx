@@ -62,11 +62,16 @@ const Index = () => {
       type: 'stock',
       multiplier: stock.multiplier,
       tickSize: stock.tickSize,
+      strikeInterval: stock.strikeInterval,
     };
     setSelectedInstrument(stockAsInstrument);
     setCurrentPrice(STOCK_DEFAULT_PRICE);
     setSimulatedPrice(STOCK_DEFAULT_PRICE);
-    setLegs([]); // Clear legs when switching instruments
+    // Update existing legs with new instrument
+    setLegs((prevLegs) => prevLegs.map(leg => ({
+      ...leg,
+      instrument: stockAsInstrument,
+    })));
   }, []);
 
   const handleAddLeg = useCallback((leg: OptionLeg) => {
