@@ -37,9 +37,17 @@ export const PayoffChart = ({ legs, currentPrice, simulatedPrice }: PayoffChartP
       
       for (let price = zoomState.minPrice; price <= zoomState.maxPrice; price += step) {
         const pnl = legs.reduce((total, leg) => {
-          const { optionType, side, strike, premium, quantity, instrument } = leg;
+          const { legType, optionType, side, strike, premium, quantity, instrument } = leg;
           const multiplier = instrument.multiplier;
           
+          // Futures leg (1 delta)
+          if (legType === 'future') {
+            const priceDiff = price - strike;
+            const positionPnL = side === 'long' ? priceDiff : -priceDiff;
+            return total + positionPnL * quantity * multiplier;
+          }
+          
+          // Option leg
           let intrinsicValue = 0;
           if (optionType === 'call') {
             intrinsicValue = Math.max(0, price - strike);

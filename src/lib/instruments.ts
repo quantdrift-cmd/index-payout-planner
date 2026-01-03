@@ -64,14 +64,16 @@ export const getInstrumentsByFamily = (family: 'SPX' | 'NDX'): Instrument[] => {
 
 export type OptionType = 'call' | 'put';
 export type PositionSide = 'long' | 'short';
+export type LegType = 'option' | 'future';
 
 export interface OptionLeg {
   id: string;
   instrument: Instrument;
-  optionType: OptionType;
+  legType: LegType;
+  optionType: OptionType; // Only used when legType is 'option'
   side: PositionSide;
-  strike: number;
-  premium: number;
+  strike: number; // For options: strike price, for futures: entry price
+  premium: number; // For options: premium, for futures: 0
   quantity: number;
   expiration?: string;
 }
@@ -82,9 +84,17 @@ export interface PayoffPoint {
 }
 
 export const calculateLegPayoff = (leg: OptionLeg, underlyingPrice: number): number => {
-  const { optionType, side, strike, premium, quantity, instrument } = leg;
+  const { legType, optionType, side, strike, premium, quantity, instrument } = leg;
   const multiplier = instrument.multiplier;
   
+  // Futures leg (1 delta): P&L = (current price - entry price) * quantity * multiplier
+  if (legType === 'future') {
+    const priceDiff = underlyingPrice - strike; // strike holds entry price for futures
+    const positionPnL = side === 'long' ? priceDiff : -priceDiff;
+    return positionPnL * quantity * multiplier;
+  }
+  
+  // Option leg
   let intrinsicValue = 0;
   
   if (optionType === 'call') {

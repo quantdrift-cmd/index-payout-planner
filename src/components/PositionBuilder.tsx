@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, Check, X, ChevronUp, ChevronDown } from 'lucide-react';
-import { Instrument, OptionLeg, OptionType, PositionSide, roundToStrike } from '@/lib/instruments';
+import { Plus, Trash2, Check, X, ChevronUp, ChevronDown, TrendingUp } from 'lucide-react';
+import { Instrument, OptionLeg, OptionType, PositionSide, LegType, roundToStrike } from '@/lib/instruments';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,6 +15,11 @@ interface PositionBuilderProps {
   currentPrice: number;
 }
 
+// Check if instrument supports futures trading
+const isFuturesInstrument = (instrument: Instrument): boolean => {
+  return instrument.type === 'future' || instrument.type === 'micro-future';
+};
+
 export const PositionBuilder = ({ 
   instrument, 
   legs, 
@@ -23,6 +28,7 @@ export const PositionBuilder = ({
   onUpdateLeg,
   currentPrice 
 }: PositionBuilderProps) => {
+  const [legType, setLegType] = useState<LegType>('option');
   const [optionType, setOptionType] = useState<OptionType>('call');
   const [side, setSide] = useState<PositionSide>('long');
   const [strike, setStrike] = useState<string>('');
@@ -35,6 +41,7 @@ export const PositionBuilder = ({
     quantity: string;
     optionType: OptionType;
     side: PositionSide;
+    legType: LegType;
   } | null>(null);
 
   // Update strike to valid ATM strike when instrument or price changes
@@ -45,21 +52,37 @@ export const PositionBuilder = ({
 
   const adjustStrike = (direction: 'up' | 'down') => {
     const currentStrike = parseFloat(strike) || currentPrice;
+    const interval = legType === 'future' ? instrument.tickSize : instrument.strikeInterval;
     const newStrike = direction === 'up' 
-      ? currentStrike + instrument.strikeInterval
-      : currentStrike - instrument.strikeInterval;
-    setStrike(Math.max(instrument.strikeInterval, newStrike).toFixed(2));
+      ? currentStrike + interval
+      : currentStrike - interval;
+    setStrike(Math.max(interval, newStrike).toFixed(2));
   };
 
   const handleAddLeg = () => {
     const newLeg: OptionLeg = {
       id: `leg-${Date.now()}`,
       instrument,
+      legType,
       optionType,
       side,
       strike: parseFloat(strike),
-      premium: parseFloat(premium),
+      premium: legType === 'future' ? 0 : parseFloat(premium),
       quantity: parseInt(quantity),
+    };
+    onAddLeg(newLeg);
+  };
+
+  const handleAddFutureLeg = (futureSide: PositionSide) => {
+    const newLeg: OptionLeg = {
+      id: `leg-${Date.now()}`,
+      instrument,
+      legType: 'future',
+      optionType: 'call', // Not used for futures
+      side: futureSide,
+      strike: currentPrice, // Entry price
+      premium: 0,
+      quantity: 1,
     };
     onAddLeg(newLeg);
   };
@@ -72,6 +95,7 @@ export const PositionBuilder = ({
       quantity: leg.quantity.toString(),
       optionType: leg.optionType,
       side: leg.side,
+      legType: leg.legType,
     });
   };
 
@@ -84,10 +108,11 @@ export const PositionBuilder = ({
     if (editValues) {
       onUpdateLeg(id, {
         strike: parseFloat(editValues.strike),
-        premium: parseFloat(editValues.premium),
+        premium: editValues.legType === 'future' ? 0 : parseFloat(editValues.premium),
         quantity: parseInt(editValues.quantity),
         optionType: editValues.optionType,
         side: editValues.side,
+        legType: editValues.legType,
       });
     }
     setEditingId(null);
@@ -96,6 +121,38 @@ export const PositionBuilder = ({
 
   return (
     <div className="space-y-4">
+      {/* Futures Quick Add (for futures instruments only) */}
+      {isFuturesInstrument(instrument) && (
+        <div className="p-3 bg-secondary/30 border border-border rounded-lg">
+          <div className="flex items-center gap-2 mb-2">
+            <TrendingUp className="h-4 w-4 text-primary" />
+            <Label className="text-xs font-semibold text-foreground">Add Futures (1 Delta)</Label>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              onClick={() => handleAddFutureLeg('long')}
+              className="flex-1 bg-profit hover:bg-profit/90 font-mono text-xs"
+            >
+              <Plus className="h-3 w-3 mr-1" />
+              LONG @ ${currentPrice.toFixed(2)}
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => handleAddFutureLeg('short')}
+              className="flex-1 bg-loss hover:bg-loss/90 font-mono text-xs"
+            >
+              <Plus className="h-3 w-3 mr-1" />
+              SHORT @ ${currentPrice.toFixed(2)}
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            Multiplier: ×{instrument.multiplier} | 1 point = ${instrument.multiplier}
+          </p>
+        </div>
+      )}
+
+      {/* Options Builder */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {/* Option Type */}
         <div className="space-y-2">
@@ -226,7 +283,7 @@ export const PositionBuilder = ({
                 <th className="data-cell text-left">Symbol</th>
                 <th className="data-cell text-left">Type</th>
                 <th className="data-cell text-left">Side</th>
-                <th className="data-cell text-right">Strike</th>
+                <th className="data-cell text-right">Strike/Entry</th>
                 <th className="data-cell text-right">Premium</th>
                 <th className="data-cell text-right">Qty</th>
                 <th className="data-cell text-right">Mult</th>
@@ -237,38 +294,46 @@ export const PositionBuilder = ({
             <tbody>
               {legs.map((leg) => {
                 const isEditing = editingId === leg.id;
-                const totalCost = leg.premium * leg.quantity * leg.instrument.multiplier;
+                const isFuture = leg.legType === 'future';
+                const totalCost = isFuture ? 0 : leg.premium * leg.quantity * leg.instrument.multiplier;
                 const isCredit = leg.side === 'short';
                 
                 if (isEditing && editValues) {
+                  const isEditingFuture = editValues.legType === 'future';
                   return (
                     <tr key={leg.id} className="border-t border-border bg-accent/30">
                       <td className="data-cell font-semibold">{leg.instrument.symbol}</td>
                       <td className="data-cell">
-                        <div className="flex gap-1">
-                          <button
-                            onClick={() => setEditValues({ ...editValues, optionType: 'call' })}
-                            className={cn(
-                              "px-2 py-0.5 text-xs rounded font-mono transition-colors",
-                              editValues.optionType === 'call' 
-                                ? "bg-call text-call-foreground" 
-                                : "bg-secondary text-muted-foreground hover:bg-secondary/80"
-                            )}
-                          >
-                            C
-                          </button>
-                          <button
-                            onClick={() => setEditValues({ ...editValues, optionType: 'put' })}
-                            className={cn(
-                              "px-2 py-0.5 text-xs rounded font-mono transition-colors",
-                              editValues.optionType === 'put' 
-                                ? "bg-put text-put-foreground" 
-                                : "bg-secondary text-muted-foreground hover:bg-secondary/80"
-                            )}
-                          >
-                            P
-                          </button>
-                        </div>
+                        {isEditingFuture ? (
+                          <span className="px-2 py-0.5 text-xs rounded font-mono bg-primary text-primary-foreground">
+                            FUT
+                          </span>
+                        ) : (
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => setEditValues({ ...editValues, optionType: 'call' })}
+                              className={cn(
+                                "px-2 py-0.5 text-xs rounded font-mono transition-colors",
+                                editValues.optionType === 'call' 
+                                  ? "bg-call text-call-foreground" 
+                                  : "bg-secondary text-muted-foreground hover:bg-secondary/80"
+                              )}
+                            >
+                              C
+                            </button>
+                            <button
+                              onClick={() => setEditValues({ ...editValues, optionType: 'put' })}
+                              className={cn(
+                                "px-2 py-0.5 text-xs rounded font-mono transition-colors",
+                                editValues.optionType === 'put' 
+                                  ? "bg-put text-put-foreground" 
+                                  : "bg-secondary text-muted-foreground hover:bg-secondary/80"
+                              )}
+                            >
+                              P
+                            </button>
+                          </div>
+                        )}
                       </td>
                       <td className="data-cell">
                         <div className="flex gap-1">
@@ -305,13 +370,17 @@ export const PositionBuilder = ({
                         />
                       </td>
                       <td className="data-cell text-right">
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={editValues.premium}
-                          onChange={(e) => setEditValues({ ...editValues, premium: e.target.value })}
-                          className="h-7 w-16 font-mono text-xs text-right ml-auto"
-                        />
+                        {isEditingFuture ? (
+                          <span className="text-muted-foreground">—</span>
+                        ) : (
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={editValues.premium}
+                            onChange={(e) => setEditValues({ ...editValues, premium: e.target.value })}
+                            className="h-7 w-16 font-mono text-xs text-right ml-auto"
+                          />
+                        )}
                       </td>
                       <td className="data-cell text-right">
                         <Input
@@ -357,9 +426,9 @@ export const PositionBuilder = ({
                     <td className="data-cell font-semibold">{leg.instrument.symbol}</td>
                     <td className={cn(
                       "data-cell font-semibold",
-                      leg.optionType === 'call' ? "text-call" : "text-put"
+                      isFuture ? "text-primary" : (leg.optionType === 'call' ? "text-call" : "text-put")
                     )}>
-                      {leg.optionType.toUpperCase()}
+                      {isFuture ? 'FUTURE' : leg.optionType.toUpperCase()}
                     </td>
                     <td className={cn(
                       "data-cell",
@@ -367,15 +436,20 @@ export const PositionBuilder = ({
                     )}>
                       {leg.side.toUpperCase()}
                     </td>
-                    <td className="data-cell text-right">${leg.strike.toFixed(2)}</td>
-                    <td className="data-cell text-right">${leg.premium.toFixed(2)}</td>
+                    <td className="data-cell text-right">
+                      ${leg.strike.toFixed(2)}
+                      {isFuture && <span className="text-xs text-muted-foreground ml-1">(entry)</span>}
+                    </td>
+                    <td className="data-cell text-right">
+                      {isFuture ? <span className="text-muted-foreground">—</span> : `$${leg.premium.toFixed(2)}`}
+                    </td>
                     <td className="data-cell text-right">{leg.quantity}</td>
                     <td className="data-cell text-right text-muted-foreground">×{leg.instrument.multiplier}</td>
                     <td className={cn(
                       "data-cell text-right font-semibold",
-                      isCredit ? "text-profit" : "text-loss"
+                      isFuture ? "text-muted-foreground" : (isCredit ? "text-profit" : "text-loss")
                     )}>
-                      {isCredit ? '+' : '-'}${totalCost.toLocaleString()}
+                      {isFuture ? '1Δ' : (isCredit ? '+' : '-') + '$' + totalCost.toLocaleString()}
                     </td>
                     <td className="data-cell text-center">
                       <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
