@@ -46,7 +46,11 @@ const Index = () => {
     const defaultPrice = DEFAULT_PRICES[instrument.symbol] || 100;
     setCurrentPrice(defaultPrice);
     setSimulatedPrice(defaultPrice);
-    setLegs([]); // Clear legs when switching instruments
+    // Update existing legs with new instrument (preserve positions, update multiplier)
+    setLegs((prevLegs) => prevLegs.map(leg => ({
+      ...leg,
+      instrument: instrument, // Update instrument reference with new multiplier
+    })));
   }, []);
 
   const handleStockSelect = useCallback((stock: Stock) => {
@@ -160,7 +164,7 @@ const Index = () => {
         </section>
 
         {/* Multiplier Reference */}
-        <MultiplierReference />
+        <MultiplierReference activeTab={activeTab} />
 
         {/* Position Builder */}
         {selectedInstrument && (
