@@ -50,6 +50,7 @@ const Index = () => {
     setLegs((prevLegs) => prevLegs.map(leg => ({
       ...leg,
       instrument: instrument, // Update instrument reference with new multiplier
+      legType: leg.legType || 'option', // Ensure legType exists
     })));
   }, []);
 
@@ -71,6 +72,7 @@ const Index = () => {
     setLegs((prevLegs) => prevLegs.map(leg => ({
       ...leg,
       instrument: stockAsInstrument,
+      legType: leg.legType || 'option', // Ensure legType exists
     })));
   }, []);
 
