@@ -5,22 +5,54 @@ export interface Instrument {
   type: 'index' | 'etf' | 'future' | 'micro-future' | 'stock';
   multiplier: number;
   tickSize: number;
+  strikeInterval: number; // Strike price interval (e.g., 5 for SPX, 1 for SPY)
 }
 
 export const instruments: Instrument[] = [
   // SPX Family
-  { symbol: 'SPX', name: 'S&P 500 Index', family: 'SPX', type: 'index', multiplier: 100, tickSize: 0.01 },
-  { symbol: 'SPY', name: 'SPDR S&P 500 ETF', family: 'SPX', type: 'etf', multiplier: 100, tickSize: 0.01 },
-  { symbol: 'XSP', name: 'Mini-SPX Index', family: 'SPX', type: 'index', multiplier: 100, tickSize: 0.01 },
-  { symbol: 'ES', name: 'E-mini S&P 500 Future', family: 'SPX', type: 'future', multiplier: 50, tickSize: 0.25 },
-  { symbol: 'MES', name: 'Micro E-mini S&P 500', family: 'SPX', type: 'micro-future', multiplier: 5, tickSize: 0.25 },
+  { symbol: 'SPX', name: 'S&P 500 Index', family: 'SPX', type: 'index', multiplier: 100, tickSize: 0.01, strikeInterval: 5 },
+  { symbol: 'SPY', name: 'SPDR S&P 500 ETF', family: 'SPX', type: 'etf', multiplier: 100, tickSize: 0.01, strikeInterval: 1 },
+  { symbol: 'XSP', name: 'Mini-SPX Index', family: 'SPX', type: 'index', multiplier: 100, tickSize: 0.01, strikeInterval: 1 },
+  { symbol: 'ES', name: 'E-mini S&P 500 Future', family: 'SPX', type: 'future', multiplier: 50, tickSize: 0.25, strikeInterval: 5 },
+  { symbol: 'MES', name: 'Micro E-mini S&P 500', family: 'SPX', type: 'micro-future', multiplier: 5, tickSize: 0.25, strikeInterval: 5 },
   
   // NDX Family
-  { symbol: 'NDX', name: 'Nasdaq 100 Index', family: 'NDX', type: 'index', multiplier: 100, tickSize: 0.01 },
-  { symbol: 'QQQ', name: 'Invesco QQQ ETF', family: 'NDX', type: 'etf', multiplier: 100, tickSize: 0.01 },
-  { symbol: 'NQ', name: 'E-mini Nasdaq 100 Future', family: 'NDX', type: 'future', multiplier: 20, tickSize: 0.25 },
-  { symbol: 'MNQ', name: 'Micro E-mini Nasdaq 100', family: 'NDX', type: 'micro-future', multiplier: 2, tickSize: 0.25 },
+  { symbol: 'NDX', name: 'Nasdaq 100 Index', family: 'NDX', type: 'index', multiplier: 100, tickSize: 0.01, strikeInterval: 25 },
+  { symbol: 'QQQ', name: 'Invesco QQQ ETF', family: 'NDX', type: 'etf', multiplier: 100, tickSize: 0.01, strikeInterval: 1 },
+  { symbol: 'NQ', name: 'E-mini Nasdaq 100 Future', family: 'NDX', type: 'future', multiplier: 20, tickSize: 0.25, strikeInterval: 25 },
+  { symbol: 'MNQ', name: 'Micro E-mini Nasdaq 100', family: 'NDX', type: 'micro-future', multiplier: 2, tickSize: 0.25, strikeInterval: 25 },
 ];
+
+// Calculate strike interval based on underlying price (CBOE standard rules)
+export const getStrikeIntervalForPrice = (price: number): number => {
+  if (price < 25) return 0.5;
+  if (price < 200) return 1;
+  if (price < 500) return 2.5;
+  if (price < 1000) return 5;
+  if (price < 5000) return 10;
+  return 25;
+};
+
+// Round strike to nearest valid strike based on interval
+export const roundToStrike = (price: number, strikeInterval: number): number => {
+  return Math.round(price / strikeInterval) * strikeInterval;
+};
+
+// Generate nearby strikes for a given price
+export const generateNearbyStrikes = (
+  currentPrice: number, 
+  strikeInterval: number, 
+  count: number = 10
+): number[] => {
+  const atm = roundToStrike(currentPrice, strikeInterval);
+  const strikes: number[] = [];
+  
+  for (let i = -count; i <= count; i++) {
+    strikes.push(atm + (i * strikeInterval));
+  }
+  
+  return strikes.filter(s => s > 0);
+};
 
 export const getInstrumentBySymbol = (symbol: string): Instrument | undefined => {
   return instruments.find(i => i.symbol === symbol);
