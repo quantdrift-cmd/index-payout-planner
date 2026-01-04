@@ -66,6 +66,43 @@ export type OptionType = 'call' | 'put';
 export type PositionSide = 'long' | 'short';
 export type LegType = 'option' | 'future';
 
+// US Futures quarterly expiry months
+export type FuturesMonth = 'H' | 'M' | 'U' | 'Z'; // Mar, Jun, Sep, Dec
+export const FUTURES_MONTHS: { code: FuturesMonth; name: string; month: number }[] = [
+  { code: 'H', name: 'Mar', month: 3 },
+  { code: 'M', name: 'Jun', month: 6 },
+  { code: 'U', name: 'Sep', month: 9 },
+  { code: 'Z', name: 'Dec', month: 12 },
+];
+
+// Get available futures expiries (current and next 4 quarters)
+export const getAvailableFuturesExpiries = (): { code: string; label: string }[] => {
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1;
+  const currentYear = now.getFullYear();
+  
+  const expiries: { code: string; label: string }[] = [];
+  let year = currentYear;
+  let startIdx = FUTURES_MONTHS.findIndex(m => m.month >= currentMonth);
+  if (startIdx === -1) {
+    startIdx = 0;
+    year++;
+  }
+  
+  for (let i = 0; i < 5; i++) {
+    const idx = (startIdx + i) % 4;
+    if (i > 0 && idx === 0) year++;
+    const month = FUTURES_MONTHS[idx];
+    const yearShort = year.toString().slice(-2);
+    expiries.push({
+      code: `${month.code}${yearShort}`,
+      label: `${month.name} ${year}`,
+    });
+  }
+  
+  return expiries;
+};
+
 export interface OptionLeg {
   id: string;
   instrument: Instrument;
@@ -75,7 +112,8 @@ export interface OptionLeg {
   strike: number; // For options: strike price, for futures: entry price
   premium: number; // For options: premium, for futures: 0
   quantity: number;
-  expiration?: string;
+  expiration?: string; // For options: date string, for futures: e.g., "H25" (Mar 2025)
+  futuresExpiry?: string; // Futures expiry code like "H25", "M25", etc.
 }
 
 export interface PayoffPoint {
