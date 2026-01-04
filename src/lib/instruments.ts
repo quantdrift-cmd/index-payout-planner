@@ -64,7 +64,7 @@ export const getInstrumentsByFamily = (family: 'SPX' | 'NDX'): Instrument[] => {
 
 export type OptionType = 'call' | 'put';
 export type PositionSide = 'long' | 'short';
-export type LegType = 'option' | 'future';
+export type LegType = 'option' | 'future' | 'stock'; // Added 'stock' for equity positions
 
 // US Futures quarterly expiry months
 export type FuturesMonth = 'H' | 'M' | 'U' | 'Z'; // Mar, Jun, Sep, Dec
@@ -123,16 +123,24 @@ export interface PayoffPoint {
 
 export const calculateLegPayoff = (leg: OptionLeg, underlyingPrice: number): number => {
   const { legType, optionType, side, strike, premium, quantity, instrument } = leg;
-  const multiplier = instrument.multiplier;
+  
+  // Stock/ETF leg (1 delta): P&L = (current price - entry price) * quantity
+  // Stocks use multiplier of 1 (each share = 1 unit), not the options multiplier
+  if (legType === 'stock') {
+    const priceDiff = underlyingPrice - strike; // strike holds entry price for stocks
+    const positionPnL = side === 'long' ? priceDiff : -priceDiff;
+    return positionPnL * quantity; // No multiplier for stocks
+  }
   
   // Futures leg (1 delta): P&L = (current price - entry price) * quantity * multiplier
   if (legType === 'future') {
     const priceDiff = underlyingPrice - strike; // strike holds entry price for futures
     const positionPnL = side === 'long' ? priceDiff : -priceDiff;
-    return positionPnL * quantity * multiplier;
+    return positionPnL * quantity * instrument.multiplier;
   }
   
   // Option leg
+  const multiplier = instrument.multiplier;
   let intrinsicValue = 0;
   
   if (optionType === 'call') {

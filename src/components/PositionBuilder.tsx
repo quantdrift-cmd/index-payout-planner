@@ -21,6 +21,11 @@ const isFuturesInstrument = (instrument: Instrument): boolean => {
   return instrument.type === 'future' || instrument.type === 'micro-future';
 };
 
+// Check if instrument supports stock/ETF position trading
+const isStockOrEtf = (instrument: Instrument): boolean => {
+  return instrument.type === 'etf' || instrument.type === 'stock';
+};
+
 // Get available futures expiries
 const futuresExpiries = getAvailableFuturesExpiries();
 
@@ -40,6 +45,8 @@ export const PositionBuilder = ({
   const [quantity, setQuantity] = useState<string>('1');
   const [futuresExpiry, setFuturesExpiry] = useState<string>(futuresExpiries[0]?.code || '');
   const [futuresEntryPrice, setFuturesEntryPrice] = useState<string>('');
+  const [stockEntryPrice, setStockEntryPrice] = useState<string>('');
+  const [stockQuantity, setStockQuantity] = useState<string>('100');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<{
     strike: string;
@@ -56,6 +63,7 @@ export const PositionBuilder = ({
     const atmStrike = roundToStrike(currentPrice, instrument.strikeInterval);
     setStrike(atmStrike.toString());
     setFuturesEntryPrice(currentPrice.toFixed(2));
+    setStockEntryPrice(currentPrice.toFixed(2));
   }, [currentPrice, instrument.strikeInterval]);
 
   const adjustStrike = (direction: 'up' | 'down') => {
@@ -93,6 +101,21 @@ export const PositionBuilder = ({
       premium: 0,
       quantity: parseInt(quantity) || 1,
       futuresExpiry,
+    };
+    onAddLeg(newLeg);
+  };
+
+  const handleAddStockLeg = (stockSide: PositionSide) => {
+    const entryPrice = parseFloat(stockEntryPrice) || currentPrice;
+    const newLeg: OptionLeg = {
+      id: `leg-${Date.now()}`,
+      instrument,
+      legType: 'stock',
+      optionType: 'call', // Not used for stocks
+      side: stockSide,
+      strike: entryPrice, // Entry price stored in strike field
+      premium: 0,
+      quantity: parseInt(stockQuantity) || 100,
     };
     onAddLeg(newLeg);
   };
@@ -204,6 +227,66 @@ export const PositionBuilder = ({
           </div>
           <p className="text-xs text-muted-foreground mt-2">
             Multiplier: ×{instrument.multiplier} | 1 point = ${instrument.multiplier}
+          </p>
+        </div>
+      )}
+
+      {/* Stock/ETF Quick Add (for ETFs and stocks only) */}
+      {isStockOrEtf(instrument) && (
+        <div className="p-3 bg-secondary/30 border border-border rounded-lg">
+          <div className="flex items-center gap-2 mb-3">
+            <TrendingUp className="h-4 w-4 text-call" />
+            <Label className="text-xs font-semibold text-foreground">
+              Add {instrument.type === 'etf' ? 'ETF' : 'Stock'} Shares (1 Delta)
+            </Label>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            {/* Entry Price */}
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Entry Price</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={stockEntryPrice}
+                onChange={(e) => setStockEntryPrice(e.target.value)}
+                className="h-9 font-mono text-xs"
+              />
+            </div>
+            
+            {/* Quantity */}
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Shares</Label>
+              <Input
+                type="number"
+                min="1"
+                value={stockQuantity}
+                onChange={(e) => setStockQuantity(e.target.value)}
+                className="h-9 font-mono text-xs"
+              />
+            </div>
+          </div>
+          
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              onClick={() => handleAddStockLeg('long')}
+              className="flex-1 bg-profit hover:bg-profit/90 font-mono text-xs"
+            >
+              <Plus className="h-3 w-3 mr-1" />
+              BUY {stockQuantity} shares
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => handleAddStockLeg('short')}
+              className="flex-1 bg-loss hover:bg-loss/90 font-mono text-xs"
+            >
+              <Plus className="h-3 w-3 mr-1" />
+              SELL {stockQuantity} shares
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            1 share = $1 per point move
           </p>
         </div>
       )}
@@ -352,11 +435,14 @@ export const PositionBuilder = ({
               {legs.map((leg) => {
                 const isEditing = editingId === leg.id;
                 const isFuture = leg.legType === 'future';
-                const totalCost = isFuture ? 0 : leg.premium * leg.quantity * leg.instrument.multiplier;
+                const isStock = leg.legType === 'stock';
+                const isOption = leg.legType === 'option';
+                const totalCost = isOption ? leg.premium * leg.quantity * leg.instrument.multiplier : 0;
                 const isCredit = leg.side === 'short';
                 
                 if (isEditing && editValues) {
                   const isEditingFuture = editValues.legType === 'future';
+                  const isEditingStock = editValues.legType === 'stock';
                   return (
                     <tr key={leg.id} className="border-t border-border bg-accent/30">
                       <td className="data-cell font-semibold">{leg.instrument.symbol}</td>
@@ -385,6 +471,10 @@ export const PositionBuilder = ({
                         {isEditingFuture ? (
                           <span className="px-2 py-0.5 text-xs rounded font-mono bg-primary text-primary-foreground">
                             FUT
+                          </span>
+                        ) : isEditingStock ? (
+                          <span className="px-2 py-0.5 text-xs rounded font-mono bg-call text-call-foreground">
+                            STK
                           </span>
                         ) : (
                           <div className="flex gap-1">
@@ -448,7 +538,7 @@ export const PositionBuilder = ({
                         />
                       </td>
                       <td className="data-cell text-right">
-                        {isEditingFuture ? (
+                        {(isEditingFuture || isEditingStock) ? (
                           <span className="text-muted-foreground">—</span>
                         ) : (
                           <Input
@@ -469,7 +559,7 @@ export const PositionBuilder = ({
                           className="h-7 w-14 font-mono text-xs text-right ml-auto"
                         />
                       </td>
-                      <td className="data-cell text-right text-muted-foreground">×{leg.instrument.multiplier}</td>
+                      <td className="data-cell text-right text-muted-foreground">{isEditingStock ? '×1' : `×${leg.instrument.multiplier}`}</td>
                       <td className="data-cell text-right text-muted-foreground">—</td>
                       <td className="data-cell text-center">
                         <div className="flex items-center justify-center gap-1">
@@ -511,9 +601,9 @@ export const PositionBuilder = ({
                     </td>
                     <td className={cn(
                       "data-cell font-semibold",
-                      isFuture ? "text-primary" : (leg.optionType === 'call' ? "text-call" : "text-put")
+                      isFuture ? "text-primary" : isStock ? "text-call" : (leg.optionType === 'call' ? "text-call" : "text-put")
                     )}>
-                      {isFuture ? 'FUTURE' : leg.optionType.toUpperCase()}
+                      {isFuture ? 'FUTURE' : isStock ? 'STOCK' : leg.optionType.toUpperCase()}
                     </td>
                     <td className={cn(
                       "data-cell",
@@ -523,18 +613,18 @@ export const PositionBuilder = ({
                     </td>
                     <td className="data-cell text-right">
                       ${leg.strike.toFixed(2)}
-                      {isFuture && <span className="text-xs text-muted-foreground ml-1">(entry)</span>}
+                      {(isFuture || isStock) && <span className="text-xs text-muted-foreground ml-1">(entry)</span>}
                     </td>
                     <td className="data-cell text-right">
-                      {isFuture ? <span className="text-muted-foreground">—</span> : `$${leg.premium.toFixed(2)}`}
+                      {(isFuture || isStock) ? <span className="text-muted-foreground">—</span> : `$${leg.premium.toFixed(2)}`}
                     </td>
-                    <td className="data-cell text-right">{leg.quantity}</td>
-                    <td className="data-cell text-right text-muted-foreground">×{leg.instrument.multiplier}</td>
+                    <td className="data-cell text-right">{leg.quantity}{isStock && <span className="text-xs text-muted-foreground ml-1">sh</span>}</td>
+                    <td className="data-cell text-right text-muted-foreground">{isStock ? '×1' : `×${leg.instrument.multiplier}`}</td>
                     <td className={cn(
                       "data-cell text-right font-semibold",
-                      isFuture ? "text-muted-foreground" : (isCredit ? "text-profit" : "text-loss")
+                      (isFuture || isStock) ? "text-muted-foreground" : (isCredit ? "text-profit" : "text-loss")
                     )}>
-                      {isFuture ? '1Δ' : (isCredit ? '+' : '-') + '$' + totalCost.toLocaleString()}
+                      {(isFuture || isStock) ? '1Δ' : (isCredit ? '+' : '-') + '$' + totalCost.toLocaleString()}
                     </td>
                     <td className="data-cell text-center">
                       <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
