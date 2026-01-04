@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Plus, Trash2, Check, X, ChevronUp, ChevronDown, TrendingUp } from 'lucide-react';
-import { Instrument, OptionLeg, OptionType, PositionSide, LegType, roundToStrike } from '@/lib/instruments';
+import { Instrument, OptionLeg, OptionType, PositionSide, LegType, roundToStrike, getAvailableFuturesExpiries } from '@/lib/instruments';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 
 interface PositionBuilderProps {
@@ -20,6 +21,9 @@ const isFuturesInstrument = (instrument: Instrument): boolean => {
   return instrument.type === 'future' || instrument.type === 'micro-future';
 };
 
+// Get available futures expiries
+const futuresExpiries = getAvailableFuturesExpiries();
+
 export const PositionBuilder = ({ 
   instrument, 
   legs, 
@@ -34,6 +38,8 @@ export const PositionBuilder = ({
   const [strike, setStrike] = useState<string>('');
   const [premium, setPremium] = useState<string>('5.00');
   const [quantity, setQuantity] = useState<string>('1');
+  const [futuresExpiry, setFuturesExpiry] = useState<string>(futuresExpiries[0]?.code || '');
+  const [futuresEntryPrice, setFuturesEntryPrice] = useState<string>('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<{
     strike: string;
@@ -42,12 +48,14 @@ export const PositionBuilder = ({
     optionType: OptionType;
     side: PositionSide;
     legType: LegType;
+    futuresExpiry: string;
   } | null>(null);
 
   // Update strike to valid ATM strike when instrument or price changes
   useEffect(() => {
     const atmStrike = roundToStrike(currentPrice, instrument.strikeInterval);
     setStrike(atmStrike.toString());
+    setFuturesEntryPrice(currentPrice.toFixed(2));
   }, [currentPrice, instrument.strikeInterval]);
 
   const adjustStrike = (direction: 'up' | 'down') => {
@@ -74,15 +82,17 @@ export const PositionBuilder = ({
   };
 
   const handleAddFutureLeg = (futureSide: PositionSide) => {
+    const entryPrice = parseFloat(futuresEntryPrice) || currentPrice;
     const newLeg: OptionLeg = {
       id: `leg-${Date.now()}`,
       instrument,
       legType: 'future',
       optionType: 'call', // Not used for futures
       side: futureSide,
-      strike: currentPrice, // Entry price
+      strike: entryPrice, // Entry price
       premium: 0,
-      quantity: 1,
+      quantity: parseInt(quantity) || 1,
+      futuresExpiry,
     };
     onAddLeg(newLeg);
   };
@@ -96,6 +106,7 @@ export const PositionBuilder = ({
       optionType: leg.optionType,
       side: leg.side,
       legType: leg.legType,
+      futuresExpiry: leg.futuresExpiry || futuresExpiries[0]?.code || '',
     });
   };
 
@@ -113,6 +124,7 @@ export const PositionBuilder = ({
         optionType: editValues.optionType,
         side: editValues.side,
         legType: editValues.legType,
+        futuresExpiry: editValues.legType === 'future' ? editValues.futuresExpiry : undefined,
       });
     }
     setEditingId(null);
@@ -124,10 +136,54 @@ export const PositionBuilder = ({
       {/* Futures Quick Add (for futures instruments only) */}
       {isFuturesInstrument(instrument) && (
         <div className="p-3 bg-secondary/30 border border-border rounded-lg">
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-2 mb-3">
             <TrendingUp className="h-4 w-4 text-primary" />
             <Label className="text-xs font-semibold text-foreground">Add Futures (1 Delta)</Label>
           </div>
+          
+          <div className="grid grid-cols-3 gap-3 mb-3">
+            {/* Expiry Selection */}
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Expiry</Label>
+              <Select value={futuresExpiry} onValueChange={setFuturesExpiry}>
+                <SelectTrigger className="h-9 text-xs font-mono">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {futuresExpiries.map((exp) => (
+                    <SelectItem key={exp.code} value={exp.code} className="text-xs font-mono">
+                      {exp.label} ({exp.code})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {/* Entry Price */}
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Entry Price</Label>
+              <Input
+                type="number"
+                step={instrument.tickSize}
+                value={futuresEntryPrice}
+                onChange={(e) => setFuturesEntryPrice(e.target.value)}
+                className="h-9 font-mono text-xs"
+              />
+            </div>
+            
+            {/* Quantity */}
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Qty</Label>
+              <Input
+                type="number"
+                min="1"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                className="h-9 font-mono text-xs"
+              />
+            </div>
+          </div>
+          
           <div className="flex gap-2">
             <Button
               size="sm"
@@ -135,7 +191,7 @@ export const PositionBuilder = ({
               className="flex-1 bg-profit hover:bg-profit/90 font-mono text-xs"
             >
               <Plus className="h-3 w-3 mr-1" />
-              LONG @ ${currentPrice.toFixed(2)}
+              BUY {futuresExpiry}
             </Button>
             <Button
               size="sm"
@@ -143,7 +199,7 @@ export const PositionBuilder = ({
               className="flex-1 bg-loss hover:bg-loss/90 font-mono text-xs"
             >
               <Plus className="h-3 w-3 mr-1" />
-              SHORT @ ${currentPrice.toFixed(2)}
+              SELL {futuresExpiry}
             </Button>
           </div>
           <p className="text-xs text-muted-foreground mt-2">
@@ -281,6 +337,7 @@ export const PositionBuilder = ({
             <thead className="bg-secondary/50">
               <tr className="text-muted-foreground text-xs">
                 <th className="data-cell text-left">Symbol</th>
+                <th className="data-cell text-left">Expiry</th>
                 <th className="data-cell text-left">Type</th>
                 <th className="data-cell text-left">Side</th>
                 <th className="data-cell text-right">Strike/Entry</th>
@@ -303,6 +360,27 @@ export const PositionBuilder = ({
                   return (
                     <tr key={leg.id} className="border-t border-border bg-accent/30">
                       <td className="data-cell font-semibold">{leg.instrument.symbol}</td>
+                      <td className="data-cell">
+                        {isEditingFuture ? (
+                          <Select 
+                            value={editValues.futuresExpiry} 
+                            onValueChange={(v) => setEditValues({ ...editValues, futuresExpiry: v })}
+                          >
+                            <SelectTrigger className="h-7 w-16 text-xs font-mono">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {futuresExpiries.map((exp) => (
+                                <SelectItem key={exp.code} value={exp.code} className="text-xs font-mono">
+                                  {exp.code}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">—</span>
+                        )}
+                      </td>
                       <td className="data-cell">
                         {isEditingFuture ? (
                           <span className="px-2 py-0.5 text-xs rounded font-mono bg-primary text-primary-foreground">
@@ -424,6 +502,13 @@ export const PositionBuilder = ({
                     onDoubleClick={() => startEditing(leg)}
                   >
                     <td className="data-cell font-semibold">{leg.instrument.symbol}</td>
+                    <td className="data-cell font-mono text-xs">
+                      {isFuture ? (
+                        <span className="px-1.5 py-0.5 bg-primary/20 text-primary rounded">{leg.futuresExpiry || '—'}</span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </td>
                     <td className={cn(
                       "data-cell font-semibold",
                       isFuture ? "text-primary" : (leg.optionType === 'call' ? "text-call" : "text-put")
