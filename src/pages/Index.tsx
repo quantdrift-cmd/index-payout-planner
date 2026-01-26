@@ -46,12 +46,7 @@ const Index = () => {
     const defaultPrice = DEFAULT_PRICES[instrument.symbol] || 100;
     setCurrentPrice(defaultPrice);
     setSimulatedPrice(defaultPrice);
-    // Update existing legs with new instrument (preserve positions, update multiplier)
-    setLegs((prevLegs) => prevLegs.map(leg => ({
-      ...leg,
-      instrument: instrument, // Update instrument reference with new multiplier
-      legType: leg.legType || 'option', // Ensure legType exists
-    })));
+    // Do NOT update existing legs - each leg keeps its original instrument
   }, []);
 
   const handleStockSelect = useCallback((stock: Stock) => {
@@ -68,12 +63,7 @@ const Index = () => {
     setSelectedInstrument(stockAsInstrument);
     setCurrentPrice(STOCK_DEFAULT_PRICE);
     setSimulatedPrice(STOCK_DEFAULT_PRICE);
-    // Update existing legs with new instrument
-    setLegs((prevLegs) => prevLegs.map(leg => ({
-      ...leg,
-      instrument: stockAsInstrument,
-      legType: leg.legType || 'option', // Ensure legType exists
-    })));
+    // Do NOT update existing legs - each leg keeps its original instrument
   }, []);
 
   const handleAddLeg = useCallback((leg: OptionLeg) => {
